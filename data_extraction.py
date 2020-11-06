@@ -1,8 +1,8 @@
 """
 A script that imports the 2018 PDBbind general set and splits it
-into training and testing dataframes. THe split is based on which
+into training and testing dataframes. The split is based on which
 of the entries belong to the union of the 2007, 2013 and 2016 PDB
-core sets.
+core sets and which belong to the 2018 refined.
 The script currently imports the six Autodock Vina features and
 a given number of the top 20 RDKit features, as listed in the paper
 doi: 10.1093/bioinformatics/btz665.
@@ -77,6 +77,20 @@ def extract_core_set(directory):
     return core_sets
 
 
+def extract_refined_set(filepath):
+    """
+    Extracts the indices of the proteins belonging to the refined set.
+    Args:
+        filename: the location of the file with the indices of the refined set
+
+    Returns: pandas series of the refined set
+    """
+
+    refined_set = pd.read_csv(filepath, index_col=0, squeeze=True)
+
+    return refined_set
+
+
 # read in rdkit and vina features
 rdkit_features = extract_rdkit_features('../data/pdbbind_2018_general_rdkit_features_clean.csv', rdkit_feature_cutoff)
 vina_features = extract_vina_features('../data/pdbbind_2018_general_binana_features_clean.csv')
@@ -98,13 +112,19 @@ if not features_data.index.equals(affinity_data.index):
     affinity_data = affinity_data.loc[intersect]
     print("The feature and affinity data have incongruent indexing. Proceeding only with data in intersection.")
 
-# get the combined core set for prediction
+# get the combined refined set for splitting training data
+refined_set = extract_refined_set('refined_set.txt')
+
+# get the combined core set for splitting testing data
 core_sets = extract_core_set('../data')
 
-# split into train and test sets
+# select elements that are both in the core set and the global set for testing
 test_set = pd.Index(core_sets['all']).intersection(features_data.index)
-train_set = features_data.index.difference(test_set)
+# select elements that are in the refined and global set, but not already in the core set for training
+train_set = refined_set.index.intersection(features_data.index).difference(test_set)
 
+
+# split into train and test sets
 features_test = features_data.loc[test_set]
 affinity_test = affinity_data.loc[test_set]
 
