@@ -1,4 +1,4 @@
-%Standard GP regression with RBF kernel and centred, normalised features and centred labels
+%Standard GP regression with Matern52 kernel and centred, normalised features and centred labels
 %Pearson_correlation_coefficient:0.6829,P-value:0.0000
 %Spearman_correlation_coefficient:0.6781,P-value:0.0000
 %RMSE:1.6613816950261615

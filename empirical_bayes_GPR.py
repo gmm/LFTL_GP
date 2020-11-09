@@ -8,11 +8,11 @@ from scipy.stats import pearsonr, spearmanr
 if not features_train.index.intersection(features_test.index).empty:
     raise ValueError('Training and test set are not disjunct.')
 
-# center and normalise features
-feat_mean = features_train.mean()
-feat_var = features_train.var()
-features_train = (features_train.sub(feat_mean)).div(feat_var)
-features_test = (features_test.sub(feat_mean)).div(feat_var)
+# center and normalise features (doesn't affect prediction quality, but drastically shortens runtime)
+#feat_mean = features_train.mean()
+#feat_var = features_train.var()
+#features_train = (features_train.sub(feat_mean)).div(feat_var)
+#features_test = (features_test.sub(feat_mean)).div(feat_var)
 
 # center labels
 aff_mean = affinity_train.mean()
@@ -32,7 +32,7 @@ features_train = features_train.values
 affinity_train = affinity_train.values.reshape(-1, 1)
 
 # choosing a kernel
-k = gp.kernels.Matern52(variance=signal_variance, lengthscales=length_scale)
+k = gp.kernels.SquaredExponential(variance=signal_variance, lengthscales=length_scale)
 m = gp.models.GPR(data=(features_train, affinity_train), kernel=k, mean_function=None)
 m.likelihood.variance.assign(noise_variance)
 
@@ -46,8 +46,8 @@ pearsonsr, pvalue = pearsonr(mean.numpy().flatten(), affinity_test.values)
 spearmansr, spvalue = spearmanr(a=mean.numpy().flatten(), b=affinity_test.values)
 rmse = np.sqrt(mean_squared_error(affinity_test.values, mean.numpy().flatten()))
 
-with open('output/GPR_f_Matern52_scaled.csv', 'w') as out_file:
-    out_file.write(f'%Standard GP regression with RBF kernel and centred, normalised features and centred labels\n')
+with open('output/GPR_f_RBF_scaledlabels.csv', 'w') as out_file:
+    out_file.write(f'%Standard GP regression with RBF kernel and centered labels\n')
     out_file.write(f'%Pearson_correlation_coefficient:{pearsonsr:.4f},P-value:{pvalue:.4f}\n')
     out_file.write(f'%Spearman_correlation_coefficient:{spearmansr:.4f},P-value:{spvalue:.4f}\n')
     out_file.write(f'%RMSE:{rmse}\n')
