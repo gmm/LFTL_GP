@@ -38,7 +38,11 @@ features_train = features_train.values
 affinity_train = affinity_train.values.reshape(-1, 1)
 
 # choosing a kernel
-k = gp.kernels.Matern52(variance=signal_variance, lengthscales=length_scale)
+k1 = gp.kernels.Matern52(variance=signal_variance, lengthscales=length_scale)
+k2 = gp.kernels.Linear(variance=signal_variance)
+
+k = k1  + k2
+
 m = gp.models.GPR(data=(features_train, affinity_train), kernel=k, mean_function=None)
 m.likelihood.variance.assign(noise_variance)
 
