@@ -1,0 +1,10 @@
+%Gaussian process regression with a Gaussian likelihood
+%model: gpr, kernel: squared_exponential
+Optimization success: True in 76 iterations, b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+%.kernel.variance: 1.8867644076221777
+%.kernel.lengthscales: [0.94708486 0.569617   0.93273279 1.05962792 0.58419631 0.65552535 1.24018781 1.74914958 0.61033099 1.45287122 1.59945673 2.73341445]
+%.likelihood.variance: 1.5365880921273107
+%loglikelihood: -6855.638697237551
+%RMSE:1.686
+%Pearson_correlation_coefficient:0.672,P-value:0.000
+%Spearman_correlation_coefficient:0.666,P-value:0.000

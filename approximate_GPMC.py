@@ -77,7 +77,7 @@ parameter_samples = hmc_helper.convert_to_constrained_values(samples)
 
 param_to_name = {param: name for name, param in gpflow.utilities.parameter_dict(model).items()}
 
-path = 'output/GPR_HMC_Matern52_centredlabels'
+path = 'GPR_HMC_Matern52_centredlabels'
 
 try:
     os.mkdir(path)
