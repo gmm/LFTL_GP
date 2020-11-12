@@ -1,41 +1,38 @@
-from GP_regression.data_extraction import features_train, features_test, affinity_train, affinity_test
 import gpflow as gp
 import numpy as np
 from sklearn.metrics import mean_squared_error
-from sklearn.preprocessing import StandardScaler
 from scipy.stats import pearsonr, spearmanr
+from GP_regression.utilities import *
+from gpflow.ci_utils import ci_niter
+np.set_printoptions(linewidth=np.inf)  # keep long length scale arrays in one line when writing to file
 
-if not features_train.index.intersection(features_test.index).empty:
-    raise ValueError('Training and test set are not disjunct.')
 
-# center and normalise features (doesn't affect prediction quality, but drastically shortens runtime)
-feat_mean = features_train.mean()
-feat_var = features_train.var()
-features_train = (features_train.sub(feat_mean)).div(feat_var)
-features_test = (features_test.sub(feat_mean)).div(feat_var)
 
-# center labels
-aff_mean = affinity_train.mean()
-affinity_train = affinity_train - aff_mean
-affinity_test = affinity_test - aff_mean
+def maximize_marginal_likelihood(kernel, model, optimizer, output_directory, testing_data, normalize_features, center_labels):
+    """
+    Set up a model with the specified kernel and parameters and maximize the marginal likelihood
+    Args:
+        kernel: the kernel object serving as the covariance function
+        model: the model object to specify and fit the GP
+        optimizer: the optimizer to maximize the marginal likelihood
+        output_directory: the directory to which the output file is written
+        testing_data: the features and label on which the regression is to be evaluated
+        normalize_features: whether the features should be scaled to mean 0 and variance 1
+        center_labels: whether the labels should be centered around zero
 
-# variance estimation
-#signal_variance = affinity_train.var()
-#noise_variance = signal_variance/2
+    Returns: prints the results to a file in the specified directory
+    """
 
-# length scale estimation
-#length_scale = np.sqrt(features_train.var(axis=0))/2
+    # non-convex optimization of the hyperparameters to maximize marginal likelihood
+    parameter_log = []
 
-signal_variance = 2.2531
-noise_variance = 1.3104
-length_scale = [0.5635456372420777, 0.1770943592142015, 0.014031030017897456, 0.2923324238121054, 0.010423891672246806,
-     0.010551633455491873, 0.19665380428839577, 0.0417655020025933, 0.0010556729903651739, 0.3772712292653649,
-     0.09059733230061488, 0.8608453382428183]
+    opt_logs = optimizer.minimize(closure=model.training_loss, variables=model.trainable_variables,
+                                  step_callback=(lambda x,y,z: parameter_log.append([x, z])),
+                                  options=dict(maxiter=ci_niter(250)))
 
-# reshaping
-#number_of_lines = 6
-features_train = features_train.values
-affinity_train = affinity_train.values.reshape(-1, 1)
+    # set data against which to validate the model
+    features_test = testing_data['features_test']
+    affinity_test = testing_data['affinity_test']
 
 # choosing a kernel
 k1 = gp.kernels.Matern52(variance=signal_variance, lengthscales=length_scale)
@@ -46,23 +43,36 @@ k = k1  + k2
 m = gp.models.GPR(data=(features_train, affinity_train), kernel=k, mean_function=None)
 m.likelihood.variance.assign(noise_variance)
 
-# optimizing the hyperparameters
-opt = gp.optimizers.Scipy()
-opt_logs = opt.minimize(m.training_loss, m.trainable_variables)
+    # create output summary file
 
-# calculate results
-mean, var = m.predict_f(features_test.values)
-pearsonsr, pvalue = pearsonr(mean.numpy().flatten(), affinity_test.values)
-spearmansr, spvalue = spearmanr(a=mean.numpy().flatten(), b=affinity_test.values)
-rmse = np.sqrt(mean_squared_error(affinity_test.values, mean.numpy().flatten()))
+    if center_labels:
+        censtr="_ctrlbs"
+    else:
+        censtr=""
 
-with open('output/GPR_f_Matern52_scaledlabels.csv', 'w') as out_file:
-    out_file.write(f'%Standard GP regression with Matern52 kernel and scaled data and labels\n')
-    out_file.write(f'%Pearson_correlation_coefficient:{pearsonsr:.4f},P-value:{pvalue:.4f}\n')
-    out_file.write(f'%Spearman_correlation_coefficient:{spearmansr:.4f},P-value:{spvalue:.4f}\n')
-    out_file.write(f'%RMSE:{rmse}\n')
-    out_file.write(f'%signal_variance:{m.kernel.variance.numpy():.4f},noise_variance:{m.likelihood.variance.numpy():.4f},ARD_lengthscales:{m.kernel.lengthscales.numpy().tolist()}\n')
-    out_file.write(f'name,f_pred_mean,f_pred_var,y_true,{",".join(features_test.columns.to_list())}\n')
-    for i in range(0, len(mean)):
-        out_file.write(f'{features_test.iloc[i].name},{mean[i][0]:.2f},{var[i][0]:.2f},{affinity_test.iloc[i]},{str(features_test.iloc[i].to_list()).strip("[]")}\n')
-    out_file.close()
+    if normalize_features:
+        norstr="_nrmfts"
+    else:
+        norstr=""
+
+    filename = f'{model.name}_{kernel.name}'+censtr+norstr+'.csv'
+
+    with open(output_directory+'/'+filename, 'w') as out_file:
+        out_file.write(f'%Gaussian process regression with a Gaussian likelihood\n')
+        out_file.write(f'%model: {model.name}, kernel: {kernel.name}\n')
+        out_file.write(f'Optimization success: {opt_logs.get("success")} in {opt_logs.get("nit")} iterations, {opt_logs.get("message")}\n')
+        for key, value in gp.utilities.read_values(model).items():
+            out_file.write(f'%{key}: {value}\n')
+        out_file.write(f'%loglikelihood: {model.log_marginal_likelihood()}\n')
+        out_file.write(f'%RMSE:{rmse:.3f}\n')
+        out_file.write(f'%Pearson_correlation_coefficient:{pearsonsr:.3f},P-value:{pvalue:.3f}\n')
+        out_file.write(f'%Spearman_correlation_coefficient:{spearmansr:.3f},P-value:{spvalue:.3f}\n')
+        #out_file.write('%%%%%%PREDICTIONS%%%%%\n')
+        #out_file.write(f'name,f_pred_mean,f_pred_var,y_true,{",".join(features_test.columns.to_list())}\n')
+        #for i in range(0, len(mean)):
+        #    out_file.write(f'{features_test.iloc[i].name},{mean[i][0]:.4f},{var[i][0]:.4f},{affinity_test.iloc[i]:.4f},{str(features_test.iloc[i].round(decimals=4).to_list()).strip("[]")}\n')
+        out_file.close()
+
+    # create feature ranking plot
+    #plot_feature_rankings(lengthscales=model.kernel.kernels[0].lengthscales.numpy(), figpath=output_directory+'/feature_relevance.png')
+    plot_parameter_change(parameter_log=parameter_log, figpath=output_directory+'/parameter_change.png')

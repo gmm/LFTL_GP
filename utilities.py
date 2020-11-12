@@ -3,16 +3,57 @@ from GP_regression.data_extraction import features_data
 import numpy as np
 import seaborn as sns
 import pandas as pd
+from gpflow.monitor import (
+    ImageToTensorBoard,
+    ModelToTensorBoard,
+    Monitor,
+    MonitorTaskGroup,
+    ScalarToTensorBoard,
+)
+import tensorflow as tf
+
+import gpflow
+from gpflow.ci_utils import ci_niter
 
 
-def plot_feature_rankings():
-    lengthscales = np.reciprocal(np.array([0.0009625500038435711, 0.16829756916372968, 0.014236495657236245, 0.32643597907738564, 0.01274348487299226, 0.00908565156167531, 0.19299571173475982, 0.042876681737993465, 0.0010468041605374342, 0.4250317841535894, 0.058636042952652505, 0.6423355830152085]))
-    lengthscales = lengthscales / np.amax(lengthscales)
+def plot_feature_rankings(lengthscales, figpath, reciprocal=True, relative=True):
+    rec_string=""
+    rel_string=""
+    if reciprocal:
+        lengthscales = np.reciprocal(lengthscales)
+        rec_string="reciprocal "
+    if relative:
+        lengthscales = lengthscales / np.amax(lengthscales)
+        rel_string = "normalized "
     feature_rankings = pd.DataFrame(data=lengthscales, columns=['lengthscales'], index=features_data.columns)
     feature_rankings = feature_rankings.sort_values(by='lengthscales', ascending=False)
-    sns.barplot(x='lengthscales', y=feature_rankings.index, data=feature_rankings, palette="vlag")
-    plt.tight_layout()
-    plt.xlabel("Normalised, reciprocal length-scale")
-    plt.show()
 
-plot_feature_rankings()
+    # plot the data
+    fig = plt.figure()
+    sns.barplot(x='lengthscales', y=feature_rankings.index, data=feature_rankings, palette="vlag")
+    plt.xlabel(rec_string+rel_string+"length scales")
+    fig.tight_layout()
+    plt.savefig(figpath, bbox_inches='tight', dpi=150)
+    plt.close()
+
+
+def plot_parameter_change(parameter_log, figpath):
+    indices = [item[0] for item in parameter_log]
+    parameters = [item[1] for item in parameter_log]
+    values = []
+    for parameter in parameters:
+        param = []
+        for tensor in parameter:
+            if isinstance(tensor.numpy(), np.ndarray):
+                param.extend(tensor.numpy().tolist())
+            else:
+                param.append(tensor.numpy())
+        values.append(param)
+    data = pd.DataFrame(index=indices, data=values)
+
+    fig = plt.figure()
+    sns.color_palette("rocket_r", as_cmap=True)
+    sns.lineplot(data=data)
+    fig.tight_layout()
+    plt.savefig(figpath, dpi=150)
+    plt.close()
