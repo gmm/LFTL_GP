@@ -54,10 +54,11 @@ def read_in_results(sample_directory):
     return result_data[['sample_size','rmse','pearsonr','spearmanr']].sort_values('sample_size')
 
 
-def plot_feature_add(data, rescaled_relevance, target_dir):
+def plot_feature_add(data, rescaled_relevance, lengthscales, target_dir):
 
     plot_data = pd.melt(data, id_vars='sample_size', var_name='metric')
     plot_relevance = pd.melt(rescaled_relevance, id_vars='sample_size', var_name='metric')
+
     plot_relevance['relevance'] = ["calculated"]*len(plot_relevance.index)
     plot_data['relevance'] = ["experimental"] * len(plot_data.index)
     plot_combined = pd.concat([plot_data,plot_relevance], ignore_index=True)
@@ -90,4 +91,16 @@ if __name__ == '__main__':
     tuples = list(zip(range(1,len(relevance)+1), rescaled_rmse, rescaled_pearsonr, rescaled_spearmanr))
     rescaled_df = pd.DataFrame(tuples, columns=['sample_size', 'rmse', 'pearsonr', 'spearmanr'])
 
-    plot_feature_add(results, rescaled_df, result_directory)
+    lengthscale_path = 'interpretation_output/adding_features_all/adding_features_0/number_features20/gpr_sum_ctrlbs_nrmfts.csv'
+    with open(lengthscale_path) as file:
+        for line in file:
+            if line.startswith('%.kernel.kernels[0].lengthscales:'):
+                parameter, value = line.split(maxsplit=1)
+                lengthscales = [float(i) for i in list(value.strip('[]\n').split())]
+    lengthscales = np.reciprocal(lengthscales)
+    lengthscales = lengthscales / np.amax(lengthscales)
+    lengthscale_df = pd.Series(lengthscales, index=range(1,len(relevance)+1))
+
+    plot_feature_add(results, rescaled_df, lengthscale_df, result_directory)
+
+
