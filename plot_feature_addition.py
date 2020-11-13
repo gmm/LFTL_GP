@@ -53,9 +53,16 @@ def read_in_results(sample_directory):
     result_data.columns = ['sample_size', 'lml', 'rmse', 'pearsonr', 'spearmanr']
     return result_data[['sample_size','rmse','pearsonr','spearmanr']].sort_values('sample_size')
 
-def plot_feature_add(data, target_dir):
+
+def plot_feature_add(data, rescaled_relevance, target_dir):
+
     plot_data = pd.melt(data, id_vars='sample_size', var_name='metric')
-    g = sns.FacetGrid(plot_data, col='metric', sharey=False)
+    plot_relevance = pd.melt(rescaled_relevance, id_vars='sample_size', var_name='metric')
+    plot_relevance['relevance'] = ["calculated"]*len(plot_relevance.index)
+    plot_data['relevance'] = ["experimental"] * len(plot_data.index)
+    plot_combined = pd.concat([plot_data,plot_relevance], ignore_index=True)
+
+    g = sns.FacetGrid(plot_combined, col='metric', hue='relevance', sharey=False)
     g.map(sns.lineplot, 'sample_size', 'value', estimator='mean', ci=95)
     g.set_axis_labels("number of features", "performance metric")
     g.despine()
@@ -66,4 +73,21 @@ def plot_feature_add(data, target_dir):
 
 if __name__ == '__main__':
     results = read_in_results(output_directory+'/'+'adding_features_all')
-    plot_feature_add(results, result_directory)
+    relevance = [0.164419, 0.091007, 0.061295, 0.054885, 0.052883, 0.049884, 0.047604,
+                 0.046830, 0.045457, 0.045169, 0.045155, 0.044796, 0.042368, 0.040893,
+                 0.031758, 0.030688, 0.030566, 0.027043, 0.026590, 0.020711]
+    relevance = np.array([sum(relevance[:i+1]) for i in range(0, len(relevance))])
+    means = results.groupby('sample_size').mean()
+
+    reverse_relevance = np.flip(relevance)
+    rescaled_rmse = np.interp(reverse_relevance, (reverse_relevance.min(), reverse_relevance.max()),
+                                  (means['rmse'].min(), means['rmse'].max())).tolist()
+    rescaled_pearsonr = np.interp(relevance, (relevance.min(), relevance.max()),
+                                  (means['pearsonr'].min(), means['pearsonr'].max())).tolist()
+    rescaled_spearmanr = np.interp(relevance, (relevance.min(), relevance.max()),
+                                  (means['spearmanr'].min(), means['spearmanr'].max())).tolist()
+
+    tuples = list(zip(range(1,len(relevance)+1), rescaled_rmse, rescaled_pearsonr, rescaled_spearmanr))
+    rescaled_df = pd.DataFrame(tuples, columns=['sample_size', 'rmse', 'pearsonr', 'spearmanr'])
+
+    plot_feature_add(results, rescaled_df, result_directory)
