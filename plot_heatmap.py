@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.color_palette("cubehelix", as_cmap=True)
-output_directory = 'output'
+output_directory = 'gridsearch_output'
 result_directory = 'results'
 
 kernel_dirs = os.listdir(output_directory)
@@ -15,7 +15,7 @@ def read_in_results(model_directory):
     Reads in the results for all runs with a given kernel and a given model.
     Args:
         model_directory: Path to the directory from which data should be extracted,
-        e.g. 'output/rbf'
+        e.g. 'gridsearch_output/rbf'
 
     Returns: a dataframe with initial hyperparameters and the results after optimization
     """
@@ -101,9 +101,3 @@ rbf_metrics = ['pearsonr', 'spearmanr', 'lml', 'rmse']
 for name in rbf_names:
     result = read_in_results(output_directory+'/'+name)
     plot_heatmap(result, rbf_metrics, name)
-
-
-
-
-
-

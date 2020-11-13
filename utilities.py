@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-from GP_regression.data_extraction import features_data
 import numpy as np
 import seaborn as sns
 import pandas as pd
@@ -16,7 +15,7 @@ import gpflow
 from gpflow.ci_utils import ci_niter
 
 
-def plot_feature_rankings(lengthscales, figpath, reciprocal=True, relative=True):
+def plot_feature_rankings(lengthscales, feature_names,  figpath, reciprocal=True, relative=True):
     rec_string=""
     rel_string=""
     if reciprocal:
@@ -25,7 +24,7 @@ def plot_feature_rankings(lengthscales, figpath, reciprocal=True, relative=True)
     if relative:
         lengthscales = lengthscales / np.amax(lengthscales)
         rel_string = "normalized "
-    feature_rankings = pd.DataFrame(data=lengthscales, columns=['lengthscales'], index=features_data.columns)
+    feature_rankings = pd.DataFrame(data=lengthscales, columns=['lengthscales'], index=feature_names)
     feature_rankings = feature_rankings.sort_values(by='lengthscales', ascending=False)
 
     # plot the data

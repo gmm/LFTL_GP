@@ -10,10 +10,11 @@ doi: 10.1093/bioinformatics/btz665.
 
 
 import pandas as pd
-rdkit_feature_cutoff = 6
+import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 
-def extract_rdkit_features(filepath, top_n):
+def extract_rdkit_features(filepath):
     """
     Extracts top n rdkit features (as ranked in the publication) from the stated filepath.
     Args:
@@ -22,15 +23,19 @@ def extract_rdkit_features(filepath, top_n):
 
     Returns: pandas dataframe with the desired features
     """
-    top_feature_names = ['Unnamed: 0', 'MolMR', 'EState_VSA1', 'MolLogP', 'Chi1v',
-                         'BertzCT', 'TPSA', 'Chi2n', 'Chi3v', 'ExactMolWt', 'MaxAbsPartialCharge',
-                         'Chi3n', 'Chi2v', 'PEOE_VSA7', 'MinEStateIndex', 'MinAbsPartialCharge',
-                         'Chi4n', 'RingCount', 'PEOE_VSA1', 'MaxPartialCharge']
+    lftl_paper_feature_names = ['Unnamed: 0', 'MolMR', 'EState_VSA1', 'MolLogP', 'Chi1v',
+                                'BertzCT', 'TPSA', 'Chi2n', 'Chi3v', 'ExactMolWt', 'MaxAbsPartialCharge',
+                                'Chi3n', 'Chi2v', 'PEOE_VSA7', 'MinEStateIndex', 'MinAbsPartialCharge',
+                                'Chi4n', 'RingCount', 'PEOE_VSA1', 'MaxPartialCharge']
 
-    if top_n > len(top_feature_names)-1:
-        raise ValueError("You requested more top features than are specified in the paper ranking.")
+    top_feature_names = ['Unnamed: 0','BalabanJ','BertzCT','HallKierAlpha','MaxAbsEStateIndex',
+                         'MaxAbsPartialCharge','MolLogP','NOCount','PEOE_VSA1','PEOE_VSA3',
+                         'PEOE_VSA6','PEOE_VSA7','PEOE_VSA8','SMR_VSA7']
 
-    features = pd.read_csv(filepath, index_col=0, usecols=top_feature_names[:top_n+1])
+    #if top_n > len(top_feature_names)-1:
+    #    raise ValueError("You requested more top features than are specified in the paper ranking.")
+
+    features = pd.read_csv(filepath, index_col=0, usecols=top_feature_names)
 
     return features
 
@@ -47,7 +52,11 @@ def extract_vina_features(filepath):
     vina_feature_names = ['Unnamed: 0', 'vina_gauss1', 'vina_gauss2', 'vina_hydrogen',
                           'vina_hydrophobic', 'vina_repulsion', 'num_rotors']
 
-    vina_features = pd.read_csv(filepath, index_col=0, usecols=vina_feature_names)
+    top_structural_feature_names = ['Unnamed: 0','as_flex_all','cc_A.HD_4',
+                                    'cc_N.N_4','lig_OA','vina_gauss2',
+                                    'vina_hydrogen','vina_repulsion']
+
+    vina_features = pd.read_csv(filepath, index_col=0, usecols=top_structural_feature_names)
 
     return vina_features
 
@@ -91,42 +100,75 @@ def extract_refined_set(filepath):
     return refined_set
 
 
-# read in rdkit and vina features
-rdkit_features = extract_rdkit_features('../data/pdbbind_2018_general_rdkit_features_clean.csv', rdkit_feature_cutoff)
-vina_features = extract_vina_features('../data/pdbbind_2018_general_binana_features_clean.csv')
+def extract_data(top_features, sample_size=None, normalize=True, center=True):
 
-# join RDKit and Vina data
-if rdkit_features.index.equals(vina_features.index):
-    features_data = rdkit_features.join(vina_features)
-else:
-    raise ValueError("RDKit and Vina training features cannot be joined: incongruent indexing")
+    # read in rdkit and vina features
+    rdkit_features = extract_rdkit_features('../data/pdbbind_2018_general_rdkit_features_clean.csv')
+    vina_features = extract_vina_features('../data/pdbbind_2018_general_binana_features_clean.csv')
 
-# read in binding affinity data
-affinity_data = extract_binding_affinity('../data/pdbbind_2018_general_binding_data_clean.csv')
+    # join RDKit and Vina data
+    if rdkit_features.index.equals(vina_features.index):
+        features_data = rdkit_features.join(vina_features)
+    else:
+        raise ValueError("RDKit and Vina training features cannot be joined: incongruent indexing")
 
-# check for which proteins the features and affinity data are available
-# keep only intersection between the two
-if not features_data.index.equals(affinity_data.index):
-    intersect = features_data.index.intersection(affinity_data.index)
-    features_data = features_data.loc[intersect]
-    affinity_data = affinity_data.loc[intersect]
-    print("The feature and affinity data have incongruent indexing. Proceeding only with data in intersection.")
+    features_data = features_data[top_features]
+    column_order = features_data.columns.values
 
-# get the combined refined set for splitting training data
-refined_set = extract_refined_set('refined_set.txt')
+    # read in binding affinity data
+    affinity_data = extract_binding_affinity('../data/pdbbind_2018_general_binding_data_clean.csv')
 
-# get the combined core set for splitting testing data
-core_sets = extract_core_set('../data')
+    # check for which proteins the features and affinity data are available
+    # keep only intersection between the two
+    if not features_data.index.equals(affinity_data.index):
+        intersect = features_data.index.intersection(affinity_data.index)
+        features_data = features_data.loc[intersect]
+        affinity_data = affinity_data.loc[intersect]
+        #print("The feature and affinity data have incongruent indexing. Proceeding only with data in intersection.")
 
-# select elements that are both in the core set and the global set for testing
-test_set = pd.Index(core_sets['all']).intersection(features_data.index)
-# select elements that are in the refined and global set, but not already in the core set for training
-train_set = refined_set.index.intersection(features_data.index).difference(test_set)
+    # get the combined refined set for splitting training data
+    refined_set = extract_refined_set('refined_set.txt')
 
+    # get the combined core set for splitting testing data
+    core_sets = extract_core_set('../data')
 
-# split into train and test sets
-features_test = features_data.loc[test_set]
-affinity_test = affinity_data.loc[test_set]
+    # select elements that are both in the core set and the global set for testing
+    test_set = pd.Index(core_sets['all']).intersection(features_data.index)
+    # select elements that are in the refined and global set, but not already in the core set for training
+    train_set = refined_set.index.intersection(features_data.index).difference(test_set)
 
-features_train = features_data.loc[train_set]
-affinity_train = affinity_data.loc[train_set]
+    # split into train and test sets
+    features_test = features_data.loc[test_set]
+    affinity_test = affinity_data.loc[test_set]
+
+    features_train = features_data.loc[train_set]
+    affinity_train = affinity_data.loc[train_set]
+
+    if sample_size is not None:
+        lines = np.random.choice(range(0, len(affinity_train)), size=sample_size)
+        features_train = features_train.iloc[lines]
+        affinity_train = affinity_train.iloc[lines]
+
+    # check for duplicates
+    if not features_train.index.intersection(features_test.index).empty:
+        raise ValueError('Training and test set are not disjunct.')
+
+    if normalize:
+        # center and normalise features (doesn't affect prediction quality, but drastically shortens runtime)
+        scaler = StandardScaler()
+        features_train = scaler.fit_transform(features_train)
+        features_test = scaler.transform(features_test)
+    else:
+        features_train = features_train.values
+        features_test = features_test.values
+
+    if center:
+        # center labels
+        aff_mean = affinity_train.mean()
+        affinity_train = affinity_train - aff_mean
+        affinity_test = affinity_test - aff_mean
+
+    training_data = {'features': features_train, 'affinity': affinity_train.values.reshape(-1, 1)}
+    testing_data = {'features': features_test, 'affinity': affinity_test}
+
+    return training_data, testing_data, column_order

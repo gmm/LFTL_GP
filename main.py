@@ -1,237 +1,124 @@
 from GP_regression.empirical_bayes_GPR import maximize_marginal_likelihood
-from GP_regression.data_extraction import features_train, features_test, affinity_train, affinity_test
-from sklearn.preprocessing import StandardScaler
+from GP_regression.data_extraction import extract_data
+from sklearn.utils import shuffle
 import numpy as np
 import gpflow as gp
 import os
+import tensorflow
 import itertools
 normalize_features = True
 center_labels = True
-output_path = 'output'
+output_path = 'interpretation_output'
+
+features_by_relevance = ['vina_gauss2', 'BertzCT', 'MolLogP', 'PEOE_VSA7', 'BalabanJ', 'SMR_VSA7', 'as_flex_all',
+                         'vina_hydrogen', 'MaxAbsEStateIndex', 'HallKierAlpha', 'MaxAbsPartialCharge',
+                         'vina_repulsion', 'PEOE_VSA8', 'PEOE_VSA1', 'lig_OA', 'PEOE_VSA3',
+                         'NOCount', 'PEOE_VSA6', 'cc_A.HD_4', 'cc_N.N_4']
+
+sample_range = list(range(50, 1501, 25)) + list(range(1600, 3800, 100))
 
 
-def matern52_grid(noise_variance, signal_variance, length_scales, training_data, testing_data):
+def add_feature_by_feature(feature_order, outdir, lsm=0.2, nvm=0.2):
 
-    # creating output directory
-    output_directory = output_path+'/matern52'
+    index_set = []
+
+    add_feat_dir = outdir
     try:
-        os.mkdir(output_directory)
+        os.mkdir(add_feat_dir)
     except OSError:
         pass
 
-    # iterating Matern52 kernel
-    signal_variance_multiplier = [1]
-    length_scale_multiplier = [0.01, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 1.5]
-    noise_variance_multiplier = [0.5, 0.1, 0.05]
+    for feature in feature_order:
 
-    for svm, lsm, nvm in itertools.product(signal_variance_multiplier, length_scale_multiplier, noise_variance_multiplier):
+        print('Proceeding with feature '+feature)
 
-        instance_directory = output_directory + f'/svm_{svm}_lsm_{lsm}_nvm_{nvm}'
+        index_set.append(feature)
+        step_directory = add_feat_dir + f'/number_features{len(index_set)}'
+
         try:
-            os.mkdir(instance_directory)
+           os.mkdir(step_directory)
         except OSError:
-            print(f'Calculation already complete for svm {svm}, lsm {lsm}, nvm {nvm}.')
+            print(f'The run for {len(index_set)} already exists.')
         else:
+            train, test, col_order = extract_data(index_set)
 
-            k = gp.kernels.Matern52(variance=(signal_variance*svm), lengthscales=(length_scales*lsm))
-            m = gp.models.GPR(data=(training_data['features_train'], training_data['affinity_train']), kernel=k, mean_function=None)
-            m.likelihood.variance.assign(noise_variance*nvm)
+            # setting initial parameters
+            signal_variance = 1
+            noise_variance = np.float64(nvm)
+            length_scales = np.ones(len(index_set)) * lsm
 
-            opt = gp.optimizers.Scipy()
-
-            print(f'Starting {k.name} kernel with svm {svm}, lsm {lsm}, nvm {nvm}.')
-
-            maximize_marginal_likelihood(kernel=k, model=m, optimizer=opt, output_directory=instance_directory,
-                                         testing_data=testing_data,
-                                         normalize_features=normalize_features, center_labels=center_labels)
-
-            print(f'Finished {k.name} kernel with svm {svm}, lsm {lsm}, nvm {nvm}.')
-
-
-def RBF_grid(noise_variance, signal_variance, length_scales, training_data, testing_data):
-
-    # creating output directory
-    output_directory = output_path+'/rbf'
-    try:
-        os.mkdir(output_directory)
-    except OSError:
-        pass
-
-    # iterating RBF kernel
-    signal_variance_multiplier = [1]
-    length_scale_multiplier = [0.01, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 1.5]
-    noise_variance_multiplier = [0.5, 0.1, 0.05, 0.01]
-
-    for svm, lsm, nvm in itertools.product(signal_variance_multiplier, length_scale_multiplier, noise_variance_multiplier):
-
-        instance_directory = output_directory + f'/svm_{svm}_lsm_{lsm}_nvm_{nvm}'
-        try:
-            os.mkdir(instance_directory)
-        except OSError:
-            print(f'Calculation already complete for svm {svm}, lsm {lsm}, nvm {nvm}.')
-        else:
-
-            k = gp.kernels.SquaredExponential(variance=(signal_variance*svm), lengthscales=(length_scales*lsm))
-            m = gp.models.GPR(data=(training_data['features_train'], training_data['affinity_train']), kernel=k, mean_function=None)
-            m.likelihood.variance.assign(noise_variance*nvm)
-
-            opt = gp.optimizers.Scipy()
-
-            print(f'Starting {k.name} kernel with svm {svm}, lsm {lsm}, nvm {nvm}.')
-
-            maximize_marginal_likelihood(kernel=k, model=m, optimizer=opt, output_directory=instance_directory,
-                                         testing_data=testing_data,
-                                         normalize_features=normalize_features, center_labels=center_labels)
-
-            print(f'Finished {k.name} kernel with svm {svm}, lsm {lsm}, nvm {nvm}.')
-
-def RBF_linear_grid(noise_variance, signal_variance, length_scales, training_data, testing_data):
-
-    # creating output directory
-    output_directory = output_path+'/rbf_linear'
-    try:
-        os.mkdir(output_directory)
-    except OSError:
-        pass
-
-    # iterating RBF kernel
-    signal_variance_multiplier = [1]
-    length_scale_multiplier = [0.01, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 1.5]
-    noise_variance_multiplier = [0.5, 0.1, 0.05, 0.01]
-
-    for svm, lsm, nvm in itertools.product(signal_variance_multiplier, length_scale_multiplier, noise_variance_multiplier):
-
-        instance_directory = output_directory + f'/svm_{svm}_lsm_{lsm}_nvm_{nvm}'
-        try:
-            os.mkdir(instance_directory)
-        except OSError:
-            print(f'Calculation already complete for svm {svm}, lsm {lsm}, nvm {nvm}.')
-        else:
-
-            rbf = gp.kernels.SquaredExponential(variance=(signal_variance*svm), lengthscales=(length_scales*lsm))
+            # defining models
+            rbf = gp.kernels.SquaredExponential(variance=signal_variance, lengthscales=length_scales)
             lin = gp.kernels.Linear()
             k = rbf + lin
-            m = gp.models.GPR(data=(training_data['features_train'], training_data['affinity_train']), kernel=k, mean_function=None)
-            m.likelihood.variance.assign(noise_variance*nvm)
-
-            opt = gp.optimizers.Scipy()
-
-            print(f'Starting {k.name} kernel with svm {svm}, lsm {lsm}, nvm {nvm}.')
-
-            maximize_marginal_likelihood(kernel=k, model=m, optimizer=opt, output_directory=instance_directory,
-                                         testing_data=testing_data,
-                                         normalize_features=normalize_features, center_labels=center_labels)
-
-            print(f'Finished {k.name} kernel with svm {svm}, lsm {lsm}, nvm {nvm}.')
-
-
-def RBF_product_linear_grid(noise_variance, signal_variance, length_scales, training_data, testing_data):
-
-    # creating output directory
-    output_directory = output_path+'/rbf_product_linear'
-    try:
-        os.mkdir(output_directory)
-    except OSError:
-        pass
-
-    # iterating RBF kernel
-    signal_variance_multiplier = [1]
-    length_scale_multiplier = [0.01, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 1.5]
-    noise_variance_multiplier = [0.5, 0.1, 0.05, 0.01]
-
-    for svm, lsm, nvm in itertools.product(signal_variance_multiplier, length_scale_multiplier, noise_variance_multiplier):
-
-        instance_directory = output_directory + f'/svm_{svm}_lsm_{lsm}_nvm_{nvm}'
-        try:
-            os.mkdir(instance_directory)
-        except OSError:
-            print(f'Calculation already complete for svm {svm}, lsm {lsm}, nvm {nvm}.')
-        else:
-
-            rbf = gp.kernels.SquaredExponential(variance=(signal_variance*svm), lengthscales=(length_scales*lsm))
-            lin = gp.kernels.Linear()
-            k = rbf*lin
-            m = gp.models.GPR(data=(training_data['features_train'], training_data['affinity_train']), kernel=k, mean_function=None)
-            m.likelihood.variance.assign(noise_variance*nvm)
-
-            opt = gp.optimizers.Scipy()
-
-            print(f'Starting {k.name} kernel with svm {svm}, lsm {lsm}, nvm {nvm}.')
-
-            maximize_marginal_likelihood(kernel=k, model=m, optimizer=opt, output_directory=instance_directory,
-                                         testing_data=testing_data,
-                                         normalize_features=normalize_features, center_labels=center_labels)
-
-            print(f'Finished {k.name} kernel with svm {svm}, lsm {lsm}, nvm {nvm}.')
-
-
-def polynomial_grid(noise_variance, training_data, testing_data):
-
-    # creating output directory
-    output_directory = output_path+'/poly'
-    try:
-        os.mkdir(output_directory)
-    except OSError:
-        pass
-
-    # iterating RBF kernel
-    degree = [4, 5, 6, 7, 8, 9, 10]
-    variance = [0.5, 1, 2]
-
-    for deg, var in itertools.product(degree, variance):
-
-        instance_directory = output_directory + f'/deg_{deg}_lvar_{var}_nvm_1'
-        try:
-            os.mkdir(instance_directory)
-        except OSError:
-            print(f'Calculation already complete for deg {deg}, var {var}.')
-        else:
-
-            k = gp.kernels.Polynomial(degree=deg, variance=var)
-            m = gp.models.GPR(data=(training_data['features_train'], training_data['affinity_train']), kernel=k, mean_function=None)
+            m = gp.models.GPR(data=(train['features'], train['affinity']), kernel=k, mean_function=None)
             m.likelihood.variance.assign(noise_variance)
 
             opt = gp.optimizers.Scipy()
 
-            print(f'Starting {k.name} kernel with deg {deg}, var {var}, nvm 1.')
+            print(f'Running feature set length {len(index_set)}')
 
-            maximize_marginal_likelihood(kernel=k, model=m, optimizer=opt, output_directory=instance_directory,
-                                         testing_data=testing_data,
+            maximize_marginal_likelihood(kernel=k, model=m, optimizer=opt, output_directory=step_directory,
+                                         testing_data=test, feature_names=col_order,
                                          normalize_features=normalize_features, center_labels=center_labels)
 
-            print(f'Finished {k.name} kernel with deg {deg}, var {var}, nvm 1.')
+
+def random_samples(sample_sizes):
+
+    sample_dir = output_path + '/random_sampling'
+    try:
+        os.mkdir(sample_dir)
+    except OSError:
+        pass
+
+    # setting initial parameters
+    signal_variance = 1
+    noise_variance = np.float64(0.2)
+    length_scales = np.ones(len(features_by_relevance)) * 0.2
+
+    # defining kernel
+    rbf = gp.kernels.SquaredExponential(variance=signal_variance, lengthscales=length_scales)
+    lin = gp.kernels.Linear()
+    k = rbf + lin
+
+    # initializing model
+    for sample_size in sample_sizes:
+
+        size_dir = sample_dir + f'/sample_size_{sample_size}'
+        try:
+            os.mkdir(size_dir)
+        except OSError:
+            pass
+
+        if sample_size <= 1500:
+            repeats = 10
+        elif sample_size > 1500 and sample_size < 3000:
+            repeats = 5
+        else:
+            repeats = 1
+
+        for i in range(0, repeats):
+
+            run_dir = size_dir + f'/run_{i}'
+            try:
+                os.mkdir(run_dir)
+            except OSError:
+                print(f"Run {i} for sample size {sample_size} already exists.")
+            else:
+                train, test, col_order = extract_data(features_by_relevance, sample_size)
+
+                m = gp.models.GPR(data=(train['features'], train['affinity']), kernel=k, mean_function=None)
+                m.likelihood.variance.assign(noise_variance)
+
+                opt = gp.optimizers.Scipy()
+
+                print(f'Running sample size {sample_size}, repetition {i}')
+
+                maximize_marginal_likelihood(kernel=k, model=m, optimizer=opt, output_directory=run_dir,
+                                             testing_data=test, feature_names=col_order,
+                                             normalize_features=normalize_features, center_labels=center_labels)
 
 
-# check for duplicates
-if not features_train.index.intersection(features_test.index).empty:
-    raise ValueError('Training and test set are not disjunct.')
-
-if normalize_features:
-    # center and normalise features (doesn't affect prediction quality, but drastically shortens runtime)
-    scaler = StandardScaler()
-    features_train = scaler.fit_transform(features_train)
-    features_test = scaler.transform(features_test)
-
-if center_labels:
-    # center labels
-    aff_mean = affinity_train.mean()
-    affinity_train = affinity_train - aff_mean
-    affinity_test = affinity_test - aff_mean
-
-# setting initial parameters
-signal_variance = affinity_train.var()
-noise_variance = signal_variance
-length_scale = np.sqrt(np.var(features_train, axis=0))
-
-# reshaping the data
-affinity_train = affinity_train.values.reshape(-1, 1)
-
-training_data = {'features_train': features_train, 'affinity_train': affinity_train}
-testing_data = {'features_test': features_test, 'affinity_test': affinity_test}
-
-polynomial_grid(noise_variance=noise_variance, training_data=training_data, testing_data=testing_data)
-
-matern52_grid(noise_variance=noise_variance, signal_variance=signal_variance, length_scales=length_scale,
-              training_data=training_data, testing_data=testing_data)
-
-
+random_samples(sample_range)
+add_feature_by_feature(feature_order=features_by_relevance, outdir=output_path + '/adding_features_1', lsm=0.5, nvm=0.15)
+add_feature_by_feature(feature_order=features_by_relevance, outdir=output_path + '/adding_features_2', lsm=0.1, nvm=0.01)
