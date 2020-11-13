@@ -34,11 +34,14 @@ def maximize_marginal_likelihood(kernel, model, optimizer, output_directory, tes
     features_test = testing_data['features']
     affinity_test = testing_data['affinity']
 
-    # calculate validation metrics
-    mean, var = model.predict_f(features_test)
-    pearsonsr, pvalue = pearsonr(mean.numpy().flatten(), affinity_test.values)
-    spearmansr, spvalue = spearmanr(a=mean.numpy().flatten(), b=affinity_test.values)
-    rmse = np.sqrt(mean_squared_error(affinity_test.values, mean.numpy().flatten()))
+# choosing a kernel
+k1 = gp.kernels.Matern52(variance=signal_variance, lengthscales=length_scale)
+k2 = gp.kernels.Linear(variance=signal_variance)
+
+k = k1  + k2
+
+m = gp.models.GPR(data=(features_train, affinity_train), kernel=k, mean_function=None)
+m.likelihood.variance.assign(noise_variance)
 
     # create output summary file
 
