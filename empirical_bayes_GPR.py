@@ -1,3 +1,11 @@
+"""
+This script contains the main output function (maximize_marginal_likelihood).
+It optimises the parameter values, calculates metrics to measure the predictive performance,
+writes them all to a central output file and (optionally) creates plots to visualise the
+parameter changes and to what extent the predictions are influenced by each feature.
+"""
+
+
 import gpflow as gp
 from sklearn.metrics import mean_squared_error
 from scipy.stats import pearsonr, spearmanr
