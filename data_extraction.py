@@ -146,10 +146,6 @@ def extract_data(top_features, sample_size=None, normalize=True, center=True):
     else:
         raise ValueError("RDKit and Vina training features cannot be joined: incongruent indexing")
 
-    # select the top n features and save the column names
-    if top_features > len(top_feature_names) - 1:
-        raise ValueError("You requested more top features than are specified in the paper ranking.")
-
     features_data = features_data[top_features]
     column_order = features_data.columns.values
 
@@ -162,7 +158,7 @@ def extract_data(top_features, sample_size=None, normalize=True, center=True):
         intersect = features_data.index.intersection(affinity_data.index)
         features_data = features_data.loc[intersect]
         affinity_data = affinity_data.loc[intersect]
-        print("The feature and affinity data have incongruent indexing. Proceeding only with data in intersection.")
+        #print("The feature and affinity data have incongruent indexing. Proceeding only with data in intersection.")
 
     # get the combined refined set for splitting training data
     refined_set = extract_refined_set('refined_set.txt')

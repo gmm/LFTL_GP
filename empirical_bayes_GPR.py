@@ -49,7 +49,7 @@ def maximize_marginal_likelihood(kernel, model, optimizer, output_directory,
     affinity_test = testing_data['affinity']
 
     # calculate the predictions and Pearson's R, Spearman's R as well as RMSE
-    mean, var = model.predict_f(features_test.values)
+    mean, var = model.predict_f(features_test)
     pearsonsr, pvalue = pearsonr(mean.numpy().flatten(), affinity_test.values)
     spearmansr, spvalue = spearmanr(a=mean.numpy().flatten(), b=affinity_test.values)
     rmse = np.sqrt(mean_squared_error(affinity_test.values, mean.numpy().flatten()))
